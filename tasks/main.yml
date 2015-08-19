@@ -3,10 +3,29 @@
   command: rpm -q kubernetes
   register: kubernetes_installed
   ignore_errors: yes
+  changed_when: False
+  tags:
+    - packages
+
+- name: test for flannel installed
+  command: rpm -q flannel
+  register: flannel_installed
+  ignore_errors: yes
+  changed_when: False
+  tags:
+    - packages
 
 - name: install kubernetes
   yum:  name={{ kubernetes_package }} state=present
   when: kubernetes_installed.rc == 1
+  tags:
+    - packages
+
+- name: install flannel
+  yum:  name={{ flannel_package }} state=present
+  when: flannel_installed.rc == 1
+  tags:
+    - packages
 
 - name: Set up configs
   template:
@@ -24,31 +43,25 @@
 
 - name: Set up services
   template:
-    src: "{{ item }}.j2"
-    dest: /etc/systemd/system/{{ item }}
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     owner: root
     group: root
     mode: 0644
   with_items:
-    - flannel.service
-    - docker.service
+    - src: flannel.service.j2
+      dest: /etc/systemd/system/flannel.service
+    - src: docker.service.j2
+      dest: /lib/systemd/system/docker.service
+  notify:
+    - daemon reload
+    - restart flannel
+    - restart docker
 
-- name: reload systemd
-  shell: systemctl daemon-reload
-
-- name: start services
+- name: initial start services
   service: name={{ item }} enabled=yes state=started
   with_items:
+    - flannel
+    - docker
     - kubelet
     - kube-proxy
-    - docker
-    - flannel
-
-- name: test for flannel installed
-  command: rpm -q flannel
-  register: flannel_installed
-  ignore_errors: yes
-
-- name: install flannel
-  yum:  name={{ flannel_package }} state=present
-  when: flannel_installed.rc == 1

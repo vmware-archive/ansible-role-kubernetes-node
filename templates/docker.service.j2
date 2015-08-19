@@ -7,7 +7,7 @@ After=network-online.target
 
 [Service]
 EnvironmentFile=/run/flannel/subnet.env
-ExecStartPre=-/usr/bin/ip link set dev docker0 down
+ExecStartPre=-/sbin/ip link set dev docker0 down
 ExecStartPre=-/usr/sbin/brctl delbr docker0
 ExecStart=/bin/docker -d -s overlay --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU}
 Restart=on-failure
