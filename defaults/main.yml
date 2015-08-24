@@ -2,3 +2,4 @@
 memory_limit: 0MB
 kubernetes_package: kubernetes
 flannel_package: flannel
+docker_service_unit: /lib/systemd/system/docker.service
