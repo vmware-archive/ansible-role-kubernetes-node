@@ -1,4 +1,5 @@
-{#
+COPYRIGHT AND LICENSE
+
    Copyright 2015 VMware, Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,19 +13,6 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-#} 
-
-# The address for the info server to serve on (set to 0.0.0.0 or "" for all interfaces)
-KUBELET_ADDRESS="--address=0.0.0.0"
-
-# The port for the info server to serve on
-KUBELET_PORT="--port=10250"
-
-# You may leave this blank to use the actual hostname
-KUBELET_HOSTNAME="--hostname_override={{ inventory_hostname }}"
-
-# location of the api-server
-KUBELET_API_SERVER="--api_servers=http://{{ master_address }}:8080"
-
-# Add your own!
-KUBELET_ARGS=""
+ 
+ 
+THIRD PARTY NOTICES:
