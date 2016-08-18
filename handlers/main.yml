@@ -17,18 +17,6 @@
 - name: daemon reload
   command: systemctl daemon-reload
 
-- name: restart kubelet
-  service:
-    name: kubelet
-    state: restarted
-    enabled: yes
-
-- name: restart kube-proxy
-  service:
-    name: kube-proxy
-    state: restarted
-    enabled: yes
-
 - name: restart flannel
   service:
     name: flannel
@@ -40,3 +28,15 @@
     name: docker
     state: restarted
     enabled: yes
+
+- name: restart kube-proxy
+  service:
+    name: kube-proxy
+    state: restarted
+    enabled: yes
+
+- name: restart kubelet
+  service:
+   name: kubelet
+   state: restarted
+   enabled: yes
