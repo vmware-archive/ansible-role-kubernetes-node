@@ -21,6 +21,7 @@
   changed_when: False
   tags:
     - packages
+    - kube_node_installation
 
 - name: test for flannel installed
   command: rpm -q flannel
@@ -29,18 +30,36 @@
   changed_when: False
   tags:
     - packages
+    - kube_node_installation    
 
 - name: install kubernetes
   yum:  name={{ kubernetes_package }} state=present
   when: kubernetes_installed.rc == 1
   tags:
     - packages
+    - kube_node_installation
 
 - name: install flannel
   yum:  name={{ flannel_package }} state=present
   when: flannel_installed.rc == 1
   tags:
     - packages
+    - kube_node_installation
+
+- name: Create flannel network config
+  template:
+    src: "templates/flannel-config.json.j2"
+    dest: "/tmp/flannel-config.json"
+    owner: root
+    group: root
+    mode: 0644
+  tags:
+    - kube_node_installation
+    
+# - name: Push flannel network config to etcd
+#   command: curl -L http://{{ master_address }}:4001/v2/keys/coreos.com/network/config -XPUT --data-urlencode value@/tmp/flannel-config.json
+#   tags:
+#     - kube_node_installation
 
 - name: Set up configs
   template:
@@ -55,8 +74,48 @@
   notify:
     - restart kubelet
     - restart kube-proxy
+  tags:
+    - kube_node_installation
 
-- name: Set up services
+- name: Update iptables with kube and etcd ports
+  template: 
+    src: "templates/kube_node-iptables.j2"
+    dest: "/etc/systemd/scripts/iptables"
+    owner: root
+    group: root
+    mode: 0744
+  tags:
+    - kube_node_installation
+
+- name: Push iptables update
+  shell: /etc/systemd/scripts/iptables
+  tags:
+    - kube_node_installation
+
+- name: Restart iptables
+  service: name={{ item }} state=restarted
+  with_items:
+    - iptables
+  tags:
+    - kube_node_installation
+
+- name: install docker service
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - src: docker.service.j2
+      dest: /etc/systemd/system/docker.service
+  notify:
+    - daemon reload
+    - restart docker
+  tags:
+    - kube_node_installation
+
+- name: install flannel service
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
@@ -69,49 +128,8 @@
   notify:
     - daemon reload
     - restart flannel
-
-- name: add flannel bridge to docker
-  lineinfile:
-    dest: "{{ docker_service_unit }}"
-    regexp: '^EnvironmentFile=/run/flannel/subnet.env'
-    line: 'EnvironmentFile=/run/flannel/subnet.env'
-    state: present
-  notify:
-    - daemon reload
-    - restart docker
-
-- name: turn off docker bridge
-  lineinfile:
-    dest: "{{ docker_service_unit }}"
-    regexp: '^ExecStartPre=-/sbin/ip link set dev docker0 down'
-    line: 'ExecStartPre=-/sbin/ip link set dev docker0 down'
-    state: present
-  notify:
-    - daemon reload
-    - restart docker
-
-- name: remove docker bridge
-  lineinfile:
-    dest: "{{ docker_service_unit }}"
-    regexp: '^ExecStartPre=-/usr/sbin/brctl delbr docker0'
-    line: 'ExecStartPre=-/usr/sbin/brctl delbr docker0'
-    state: present
-  notify:
-    - daemon reload
-    - restart docker
-
-- name: add consul dns to docker
-  lineinfile:
-    dest: "{{ docker_service_unit }}"
-    # starts normal, keep non leading dash things, keep -x word things, strip out --mtu or --bip=\S. things
-    regexp: '^ExecStart=/bin/docker (([^-]*(-(?!(?:-mtu|-bip)=\S+).)+[^-]*)*)\n$'
-    line: 'ExecStart=/bin/docker \1 --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU}'
-    backrefs: yes
-    state: present
-  notify:
-    - reload systemd
-    - restart docker
-
+  tags:
+    - kube_node_installation
 
 - name: initial start services
   service: name={{ item }} enabled=yes state=started
@@ -120,3 +138,12 @@
     - docker
     - kubelet
     - kube-proxy
+  tags:
+    - kube_node_installation
+
+- name: initial start services
+  service: name={{ item }} enabled=yes state=started
+  with_items:
+    - kubelet
+  tags:
+    - kube_node_installation
