@@ -14,9 +14,6 @@ echo 1 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
 echo 0 > /proc/sys/net/ipv4/conf/all/accept_source_route
 echo 0 > /proc/sys/net/ipv4/conf/default/accept_source_route
 
-# Enable TCP SYN Cookie Protection
-# echo 1 > /proc/sys/net/ipv4/tcp_syncookies
-
 # Disable ICMP Redirect Acceptance
 echo 0 > /proc/sys/net/ipv4/conf/default/accept_redirects
 
@@ -69,9 +66,6 @@ iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 #Enable ssh connections
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 
-# Enable kubelet connections
-iptables -A INPUT -p tcp --dport 10250 -j ACCEPT
-
 {% if flannel_network_type == 'udp' or flannel_network_type == 'vxlan'%}
 # Enable flannel connection for {{ flannel_network_type }}
 iptables -A INPUT -p udp --dport {{ flannel_service_port }} -j ACCEPT
@@ -82,6 +76,13 @@ iptables -A INPUT -p udp --dport {{ flannel_service_port }} -j ACCEPT
 {% if flannel_network_type == 'vxlan' %}
 iptables -A INPUT -p udp --dport 6177 -j ACCEPT
 {% endif %}
+
+# Enable kubelet connections
+iptables -A INPUT -p tcp --dport 10250 -j ACCEPT
+iptables -A INPUT -p tcp --dport 10255 -j ACCEPT
+
+# cAdvisor
+iptables -A INPUT -p tcp --dport 4194 -j ACCEPT
 
 # Enable ICMP
 iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
@@ -94,9 +95,5 @@ iptables -N LOGGING
 iptables -A INPUT -j LOGGING
 iptables -A OUTPUT -j LOGGING
 iptables -A LOGGING -m limit --limit 1/sec -j LOG --log-prefix "IPTables-Dropped: " --log-level 7
-
-# If you have turned off Docker’s IP masquerading to allow pods to talk to each other,
-# then you may need to do masquerading just for destination IPs outside the cluster network.
-#iptables -t nat -A POSTROUTING ! -d ${CLUSTER_SUBNET} -m addrtype ! --dst-type LOCAL -j MASQUERADE
 
 # End /etc/systemd/scripts/iptables

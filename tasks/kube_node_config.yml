@@ -1,22 +1,20 @@
+#
+#  Copyright 2015 VMware, Inc.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
 ---
-<<<<<<< 1411b1ab1b0cfff7a1ce09460a2a2a388d59827b
-#### SYSCTL START ####
-- name: Enable IPv4 routing in the kernel
-  sysctl:
-    name: net.ipv4.ip_forward
-    value: 1
-    state: present
-  tags:
-    - kube_node_installation
-#### SYSCTL END ####
-
 #### IPTABLES START ####
-- name: Disable iptables
-  service: name=iptables enabled=no state=stopped
-  when: enable_kube_host_iptables == "0"
-  tags:
-    - kube_node_installation
-
 - name: Update iptables required ports
   template: 
     src: "templates/misc/kube_node-iptables.j2"
@@ -24,19 +22,18 @@
     owner: root
     group: root
     mode: 0744
-  when: enable_kube_host_iptables == "1"
   tags:
     - kube_node_installation
 
 - name: Push iptables update
   shell: "{{ iptables_rules_script }}"
-  when: enable_kube_host_iptables == "1"
   tags:
     - kube_node_installation
 
 - name: Restart iptables
-  service: name=iptables state=restarted
-  when: enable_kube_host_iptables == "1"
+  service: 
+    name: iptables
+    state: restarted
   tags:
     - kube_node_installation
 #### IPTABLES START ####
@@ -55,12 +52,13 @@
 
 #### FLANNEL START ####
 - name: Install flannel
-  yum:  name={{ flannel_pkg }} state=present
-  # use_pkg_mgr_for_flannel called out in photon_kube.yml playbook
+  yum: 
+    name: "{{ flannel_pkg }}"
+    state: present
   when: not install_flannel_from_src
   tags:
     - packages
-    - kube_master_installation
+    - kube_node_installation
     
 - name: Download flannel binary from Github
   get_url:
@@ -69,11 +67,10 @@
     owner: root
     group: root
     mode: 0755    
-  # use_pkg_mgr_for_flannel called out in photon_kube.yml playbook    
   when: install_flannel_from_src
   tags:
     - packages
-    - kube_master_installation
+    - kube_node_installation
 
 - name: Install flannel service unit
   template:
@@ -91,14 +88,19 @@
     - kube_node_installation
 
 - name: Start flannel service
-  service: name=flannel enabled=yes state=restarted
+  service: 
+    name: flannel
+    enabled: yes
+    state: restarted
   tags:
     - kube_node_installation
 #### FLANNEL END ####
 
 #### DOCKER START ####
 - name: Install docker
-  yum:  name={{ docker_package }} state=present
+  yum:  
+    name: "{{ docker_package }}"
+    state: present
   tags:
     - packages
     - kube_node_installation
@@ -119,14 +121,19 @@
     - kube_node_installation
 
 - name: Start docker service
-  service: name=docker enabled=yes state=restarted
+  service: 
+    name: docker
+    enabled: yes
+    state: restarted
   tags:
     - kube_node_installation
 #### DOCKER END ####
 
 #### KUBERNETES MINION START ####
 - name: Install kubernetes from package manager
-  yum:  name={{ kubernetes_package }} state=present
+  yum:  
+    name: "{{ kube_pkg }}"
+    state: present
   when: install_kube_from_src == "0"
   tags:
     - packages
@@ -218,20 +225,32 @@
   tags:
     - kube_node_installation
 
+- name: Create kubelet directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0644
+  with_items:
+    - "{{ kubelet_manifests_dir }}"
+    - /root/.docker
+  tags:
+    - kube_node_installation
+
 - name: Install kubelet and kube-proxy configs
   template:
-    src: "templates/configs/{{ item }}.j2"
-    dest: "{{ kube_cfg_dir }}/{{ item }}"
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     owner: root
     group: root
     mode: 0644
   with_items:
-    - config
-    - kubelet
+    - { src: "templates/configs/config.j2", dest: "{{ kube_cfg_dir }}/config" }
+    - { src: "templates/configs/kubelet.j2", dest: "{{ kube_cfg_dir }}/kubelet" }
+    - { src: "templates/configs/fluentd.yaml.j2", dest: "{{ kubelet_manifests_dir }}/fluentd.yaml" }
   tags:
     - kube_node_installation
 
-- name: Install the kube minion systemd services
+- name: Install the kube-proxy systemd service
   template:
     src: "templates/systemd/{{ item.name }}.service.j2"
     dest: "{{ item.svc }}"
@@ -240,13 +259,39 @@
     mode: 0644
   with_items:
     - { name: "kube-proxy", svc: "/etc/systemd/system/kube-proxy.service" }
-    - { name: "kubelet", svc: "/etc/systemd/system/kubelet.service" }  
   when: install_kube_from_src == "1"
   tags:
     - kube_node_installation
 
+- name: Install the kubelet systemd service
+  template:
+    src: "templates/systemd/{{ item.name }}.service.j2"
+    dest: "{{ item.svc }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - { name: "kubelet", svc: "/etc/systemd/system/kubelet.service" }  
+  tags:
+    - kube_node_installation
+
+- name: Enable support for image pull from Docker hub
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - { src: templates/configs/docker_config.json, dest: /root/.docker/config.json }
+  tags:
+    - kube_node_installation
+
 - name: Start kube-proxy and kubelet
-  service: name={{ item }} enabled=yes state=restarted
+  service: 
+    name: "{{ item }}"
+    enabled: yes
+    state: restarted
   with_items:
     - kube-proxy
     - kubelet
@@ -261,10 +306,10 @@
     - kube_node_installation
     
 - name: Start kubelet
-  service: name=kubelet enabled=yes state=started
+  service: 
+    name: kubelet 
+    enabled: yes
+    state: started
   tags:
     - kube_node_installation
 #### KUBERNETES MINION END ####
-=======
-- include: kube_node_config.yml
->>>>>>> p1: Updated to support new sw versions,
