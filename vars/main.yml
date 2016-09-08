@@ -16,6 +16,7 @@
 docker_api_version: 1.18
 elasticsearch_mapped_dir: /var/lib/elasticsearch
 cluster_name: elasticky
+systemd_script_dir: /etc/systemd/scripts
 
 # Container memory limit. Use 512MB, type string, or 0 for unlimited
 memory_limit: 0MB
