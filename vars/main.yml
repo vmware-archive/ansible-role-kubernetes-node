@@ -78,4 +78,3 @@ eventer_memory_per_node: 500
 eventer_memory: "{{ eventer_memory_initial + (eventer_memory_per_node * (groups['kubernetes_node'] | count) / 1024) | round | int }}Mi"
 
 grains: ""
->>>>>>> p1: Updated to support new sw versions,
